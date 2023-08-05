@@ -1,12 +1,11 @@
 import os
 from datetime import datetime
-import readline  # Add readline module for improved input handling
-
+import readline
 class File:
     def __init__(self, name, content="", permissions="rw-"):
         self.name = name
         self.content = content
-        self.created_time = datetime.now()  # Record the creation timestamp
+        self.created_time = datetime.now()
         self.modified_time = datetime.now()
         self.permissions = permissions
 
@@ -34,7 +33,8 @@ class Folder:
     def __init__(self, name):
         self.name = name
         self.contents = []
-        self.created_time = datetime.now()  # Record the creation timestamp
+        self.created_time = datetime.now()
+        self.parent = None
 
     def get_size(self):
         total_size = 0
@@ -157,12 +157,19 @@ class FileSystem:
                 print(f"{item.name}/ [Created: {created_time}]")
 
     def pwd(self):
-        print(os.path.abspath(self.current_folder.name))
+        path = self.get_full_path(self.current_folder)
+        print(f"Current directory: {path}")
+
+    def get_full_path(self, folder):
+        if folder == self.root:
+            return "/" + folder.name
+        parent_path = self.get_full_path(folder.parent)
+        return os.path.join(parent_path, folder.name)
 
     def cd(self, folder_name):
         if folder_name == "..":
             if self.current_folder != self.root:
-                self.current_folder = self.root
+                self.current_folder = self.current_folder.parent
         else:
             for item in self.current_folder.contents:
                 if isinstance(item, Folder) and item.name == folder_name:
@@ -170,7 +177,7 @@ class FileSystem:
                     break
             else:
                 print(f"Folder '{folder_name}' not found.")
-        self.journal.append(f"Changed directory")
+        self.journal.append(f"Changed directory to '{self.current_folder.name}'")
 
     def cat(self, file_name):
         for item in self.current_folder.contents:
@@ -185,6 +192,7 @@ class FileSystem:
                 print(f"Folder '{folder_name}' already exists.")
                 return
         new_folder = Folder(folder_name)
+        new_folder.parent = self.current_folder  # Set parent
         self.current_folder.contents.append(new_folder)
         self.journal.append(f"Created folder '{folder_name}' at {new_folder.created_time}")
 
@@ -194,6 +202,7 @@ class FileSystem:
                 print(f"File '{file_name}' already exists.")
                 return
         new_file = File(file_name)
+        new_file.parent = self.current_folder  # Set parent
         self.current_folder.contents.append(new_file)
         self.journal.append(f"Created file '{file_name}' at {new_file.created_time}")
 
@@ -201,7 +210,7 @@ class FileSystem:
         for item in self.current_folder.contents:
             if isinstance(item, File) and item.name == file_name:
                 self.current_folder.contents.remove(item)
-                self.journal.append(f"Deleted file '{file_name}' ")
+                self.journal.append(f"Deleted file '{file_name}'")
                 return
         print(f"File '{file_name}' not found.")
 
@@ -209,7 +218,7 @@ class FileSystem:
         for item in self.current_folder.contents:
             if isinstance(item, Folder) and item.name == folder_name:
                 self.current_folder.contents.remove(item)
-                self.journal.append(f"Deleted folder '{folder_name}''")
+                self.journal.append(f"Deleted folder '{folder_name}'")
                 return
         print(f"Folder '{folder_name}' not found.")
 
@@ -221,8 +230,9 @@ class FileSystem:
                 return
 
         new_file = File(file_name, content)
+        new_file.parent = self.current_folder  # Set parent
         self.current_folder.contents.append(new_file)
-        self.journal.append(f"Created file '{file_name}'  at {new_file.created_time}")
+        self.journal.append(f"Created file '{file_name}' at {new_file.created_time}")
 
     def cp(self, source_file, destination_file):
         source = None
@@ -238,8 +248,9 @@ class FileSystem:
                 print(f"Destination file '{destination_file}' already exists.")
                 return
         destination = File(destination_file, source.content, source.permissions)
+        destination.parent = self.current_folder  # Set parent
         self.current_folder.contents.append(destination)
-        self.journal.append(f"Copied file '{source_file}' to '{destination_file}'  at {destination.created_time}")
+        self.journal.append(f"Copied file '{source_file}' to '{destination_file}' at {destination.created_time}")
 
     def mv(self, source_file, destination_file):
         source = None
@@ -255,6 +266,7 @@ class FileSystem:
                 print(f"Destination file '{destination_file}' already exists.")
                 return
         source.name = destination_file
+        source.modified_time = datetime.now()  # Update modified time
         self.journal.append(f"Moved file '{source_file}' to '{destination_file}' at {source.modified_time}")
 
     def size(self, name):
@@ -279,20 +291,12 @@ class FileSystem:
     def journaling(self):
         with open("journal.txt", "w") as journal_file:
             for entry in self.journal:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                parts = entry.split(" ")
-                if parts[0] == "Created" and parts[1] == "folder":
-                    folder_name = parts[2]
-                    folder_path = self.get_relative_path(self.current_folder)
-                    journal_file.write(f"{entry} '{folder_path}/{folder_name}' at {timestamp}\n")
-                else:
-                    journal_file.write(f"{entry} at {timestamp}\n")
+                journal_file.write(entry + "\n")
 
-    def get_relative_path(self, folder, path=""):
-        if folder == self.root:
-            return path
-        return self.get_relative_path(folder.parent, f"{folder.name}/{path}")
+def embed():
+    fs = FileSystem()
+    fs.run()
+    fs.journaling()
 
-fs = FileSystem()
-fs.run()
-fs.journaling()
+if __name__ == "__main__":
+    embed()
